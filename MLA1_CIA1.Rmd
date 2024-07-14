@@ -1,0 +1,268 @@
+---
+title: "MLA1_CIA1"
+author: "RishideepPan_2328050"
+date: "2024-07-14"
+output: html_document
+---
+```{r}
+heart<-read.csv("C:\\Users\\rishi\\Downloads\\heart (1).csv")
+str(heart)
+plot_missing(heart)
+colnames(heart) 
+heart <- subset(heart, select = -family_record)
+heart <- subset(heart, select = -past_record)
+heart<- subset(heart,select=-wrist_dim)
+plot_missing(heart)
+```
+```{r}
+plot_density(heart$biceps_dim)
+mean_biceps_dim <- mean(heart$biceps_dim, na.rm = TRUE)
+heart$biceps_dim[is.na(heart$biceps_dim)] <- mean_biceps_dim
+
+plot_density(heart$chest_dim)
+median_chest_dim <- median(heart$chest_dim, na.rm = TRUE)
+heart$chest_dim[is.na(heart$chest_dim)] <- median_chest_dim
+
+plot_density(heart$hip_dim)
+median_hip_dim <- median(heart$hip_dim, na.rm = TRUE)
+heart$hip_dim[is.na(heart$hip_dim)] <- median_hip_dim
+
+plot_density(heart$thigh_dim)
+median_thigh_dim <- median(heart$thigh_dim, na.rm = TRUE)
+heart$thigh_dim[is.na(heart$thigh_dim)] <- median_thigh_dim
+
+plot_density(heart$fat_free_wt)
+median_fatfree <- median(heart$fat_free_wt, na.rm = TRUE)
+heart$fat_free_wt[is.na(heart$fat_free_wt)] <- median_fatfree
+
+plot_density(heart$height)
+median_ht <- median(heart$height, na.rm = TRUE)
+heart$height[is.na(heart$height)] <- median_ht
+
+plot_missing(heart)
+```
+```{r}
+summary(heart)
+correlation_matrix <- cor(heart[, !names(heart) %in% c("heart_attack")], use = "complete.obs")  
+print(correlation_matrix)
+ggcorrplot::ggcorrplot(correlation_matrix,lab = TRUE)
+```
+```{r}
+set.seed(123)  
+splitIndex <- createDataPartition(heart$heart_attack, p = 0.7, list = FALSE)
+train_data <- heart[splitIndex, ]
+test_data <- heart[-splitIndex, ]
+
+model1_full<- lm(heart_attack~., data = train_data)
+summary(model1_full)
+predictions <- predict(model1_full, test_data)
+mse <- mean((predictions - test_data$heart_attack)^2)
+r2 <- cor(predictions, test_data$heart_attack)^2
+cat("MSE:", mse, "\n")
+cat("R²:", r2, "\n")
+plot(model1_full)
+```
+```{r}
+model1_reduced<-lm(heart_attack~height+chest_dim +abdom_dim , data = train_data)
+summary(model1_reduced)
+predictions <- predict(model1_reduced, test_data)
+mean_test <- mean(test_data$heart_attack)
+mse <- mean((predictions - test_data$heart_attack)^2)
+mse
+sum_sq_explained_2 <- sum((predictions-mean_test)^2)
+sum_sq_total_2 <- sum((test_data$heart_attack-mean_test)^2)
+sum_sq_residual_2 <- sum((test_data$heart_attack - predictions)^2)
+
+r_square_2 <- 1 - sum_sq_residual_2/sum_sq_total_2
+r_square_2
+
+stepwise_model <- stepAIC(model1_full, direction = "backward")
+reduced_model1<-lm(heart_attack ~ past_pain + density + weight + height + fat_free_wt + 
+                     neck_dim + chest_dim + abdom_dim + hip_dim + thigh_dim + 
+                     forearm_dim, data = train_data)
+summary(reduced_model1)
+
+stepwise_model <- stepAIC(model1_full, direction = "backward")
+plot(reduced_model1)
+
+predictions <- predict(reduced_model1, test_data)
+mse <- mean((predictions - test_data$heart_attack)^2)
+r2 <- cor(predictions, test_data$heart_attack)^2
+cat("MSE:", mse, "\n")
+cat("R²:", r2, "\n")
+summary(heart$heart_attack)
+
+
+set.seed(40)
+model <- train(heart_attack ~., data = train_data, method = "lm", trControl = trainControl(method = "cv", number = 8))
+mean(model$resample[,"Rsquared"])
+summary(model)
+
+pred_test_2 <- predict(model, newdata = test_data)
+
+mean_test_2 <- mean(test_data$heart_attack)
+sum_sq_explained_2 <- sum((pred_test_2-mean_test_2)^2)
+sum_sq_total_2 <- sum((test_data$heart_attack-mean_test_2)^2)
+sum_sq_residual_2 <- sum((test_data$heart_attack - pred_test_2)^2)
+
+r_square_2 <- 1 - sum_sq_residual_2/sum_sq_total_2
+r_square_2
+
+colnames(heart)
+x_train<-as.matrix(train_data[,-c(17)])
+y_train <- as.matrix(train_data[17])
+
+x_test<-as.matrix(test_data[,-c(17)])
+y_test <- as.matrix(test_data[17])
+
+set.seed(40)
+cv_nhlreg <- glmnet::cv.glmnet(x=x_train, y=y_train,alpha=1, nfolds=8)
+plot(cv_nhlreg)
+lambda_min <- cv_nhlreg$lambda.min
+lambda_min
+lambda_1se<-cv_nhlreg$lambda.1se
+lambda_1se
+
+model_1se <- glmnet::glmnet(x_test, y_test, alpha = 1, lambda = lambda_1se)
+
+
+pred_test_3 <- predict(model_1se, s = lambda_1se, newx = x_test)
+mean_test_3 <- mean(test_data$heart_attack)
+sum_sq_explained_3 <- sum((pred_test_3-mean_test_3)^2)
+sum_sq_total_3 <- sum((test_data$heart_attack-mean_test_3)^2)
+sum_sq_residual_3 <- sum((test_data$heart_attack - pred_test_3)^2)
+
+r_square_3 <- 1 - sum_sq_residual_3/sum_sq_total_3
+r_square_3
+plot_missing(heart)
+
+y_train<-train_data$heart_attack
+y_train_pred<- predict(reduced_model1,newdata = train_data)
+SSR_train <- sum((y_train - y_train_pred)^2)  
+SS_total_train <- sum((y_train - mean(y_train))^2) 
+R2_train <- 1 - (SSR_train / SS_total_train) 
+cat("R-squared for training dataset:", R2_train, "\n")
+
+y_test<-test_data$heart_attack
+y_test_pred<- predict(reduced_model1,newdata = test_data)
+SSR_test <- sum((y_test - y_test_pred)^2)  
+SS_total_test <- sum((y_test - mean(y_test))^2) 
+R2_test <- 1 - (SSR_test / SS_total_test) 
+cat("R-squared for testing dataset:", R2_test, "\n")
+
+vif(reduced_model1)
+
+red_mod<-lm(heart_attack~height+neck_dim+chest_dim+hip_dim +thigh_dim+forearm_dim,data=train_data)
+summary(red_mod)
+
+#Lasso
+x_train<-as.matrix(train_data[,-c(17)])
+y_train <- as.matrix(train_data[17])
+
+x_test<-as.matrix(test_data[,-c(17)])
+y_test <- as.matrix(test_data[17])
+
+lasso_rig<-glmnet(x_train,y_train,alpha = 1,lambda = lamda) 
+summary(lasso_rig)
+
+#Cross Validation
+lasso_reg1<-cv.glmnet(x_train,y_train,alpha=1)
+bestlam<-lasso_reg1$lambda.min
+bestlam
+lasso.spend<-predict(lasso_rig,s=bestlam,newx=x_test)
+
+#MSE
+mse<-mean((y_test-lasso.spend)^2)
+mse
+
+#R2
+sst<-sum((y_test-mean(y_test))^2)
+sse<-sum((y_test-lasso.spend)^2)
+r2<-1-(sse/sst)
+print(r2)
+
+#Ridge
+ridge_rig<-glmnet(x_train,y_train,alpha = 0,lambda = lamda) 
+summary(ridge_rig)
+
+#Cross Validation
+ridge_reg1<-cv.glmnet(x_train,y_train,alpha=0)
+bestlam<-ridge_reg1$lambda.min
+bestlam
+ridge.heart<-predict(ridge_rig,s=bestlam,newx=x_test)
+
+#MSE
+mse<-mean((y_test-ridge.heart)^2)
+mse
+
+#R2
+sst<-sum((y_test-mean(y_test))^2)
+sse<-sum((y_test-ridge.heart)^2)
+r2<-1-(sse/sst)
+print(r2)
+
+
+avg<-sum(heart$heart_attack)/nrow(heart)
+heart$heart_attack_flag <- ifelse(heart$heart_attack < avg, 0, 1)
+head(heart$heart_attack_flag)
+heart$heart_attack_flag
+
+set.seed(123)  
+splitIndex_log <- createDataPartition(heart$heart_attack_flag, p = 0.7, list = FALSE)
+train_data_log <- heart[splitIndex, ]
+test_data_log <- heart[-splitIndex, ]
+model_log<-glm(heart_attack_flag~.,,data=train_data_log)
+summary(model_log)
+
+heart_log<-read.csv("C:\\Users\\rishi\\Downloads\\heart (1).csv")
+plot_missing(heart_log)
+heart_log <- subset(heart_log, select = -family_record)
+heart_log <- subset(heart_log, select = -past_record)
+heart_log<- subset(heart_log,select=-wrist_dim)
+
+mean_biceps_dim <- mean(heart_log$biceps_dim, na.rm = TRUE)
+heart_log$biceps_dim[is.na(heart_log$biceps_dim)] <- mean_biceps_dim
+
+median_chest_dim <- median(heart_log$chest_dim, na.rm = TRUE)
+heart_log$chest_dim[is.na(heart_log$chest_dim)] <- median_chest_dim
+
+median_hip_dim <- median(heart_log$hip_dim, na.rm = TRUE)
+heart_log$hip_dim[is.na(heart_log$hip_dim)] <- median_hip_dim
+
+median_thigh_dim <- median(heart_log$thigh_dim, na.rm = TRUE)
+heart_log$thigh_dim[is.na(heart_log$thigh_dim)] <- median_thigh_dim
+
+#plot_density(heart$fat_free_wt)
+median_fatfree <- median(heart_log$fat_free_wt, na.rm = TRUE)
+heart_log$fat_free_wt[is.na(heart_log$fat_free_wt)] <- median_fatfree
+
+#plot_density(heart$height)
+median_ht <- median(heart_log$height, na.rm = TRUE)
+heart_log$height[is.na(heart_log$height)] <- median_ht
+
+plot_missing(heart_log)
+
+avg<-sum(heart_log$heart_attack)/nrow(heart_log)
+avg
+heart_log$heart_attack <- ifelse(heart_log$heart_attack < avg, 0, 1)
+head(heart_log$heart_attack)
+heart_log$heart_attack
+
+set.seed(123)  
+splitIndex_log <- createDataPartition(heart_log$heart_attack, p = 0.7, list = FALSE)
+train_data_log <- heart_log[splitIndex, ]
+test_data_log <- heart_log[-splitIndex, ]
+
+model_log<-glm(heart_attack~.,,data=train_data_log,family = binomial)
+summary(model_log)
+
+test_data_log$predicted_prob <- predict(model_log, newdata = test_data_log, type = "response")
+test_data_log$predicted_class <- ifelse(test_data_log$predicted_prob > 0.5, 1, 0)
+
+accuracy <- mean(test_data_log$predicted_class == test_data_log$heart_attack) * 100
+cat("Accuracy of Logistic Regression model on test data:", round(accuracy, 2), "%\n")
+
+conf_matrix <- table(test_data_log$heart_attack, test_data_log$predicted_class)
+print("Confusion Matrix:")
+print(conf_matrix)
+```
